@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マイクラ カスタム音声リソースパック生成ツール</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip for creating zip files in the browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Lucide for icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* カスタムスクロールバー */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        .tab-active {
+            color: #059669; /* emerald-600 */
+            border-bottom-color: #059669;
+        }
+        .tab-inactive {
+            color: #6b7280; /* gray-500 */
+            border-bottom-color: transparent;
+        }
+        .tab-inactive:hover {
+            color: #059669;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-emerald-600 text-white p-4 shadow-md sticky top-0 z-10">
+        <div class="container mx-auto max-w-5xl flex items-center justify-between">
+            <h1 class="text-xl md:text-2xl font-bold flex items-center">
+                <i data-lucide="box" class="mr-2"></i>
+                マイクラ カスタム音声パックジェネレーター
+            </h1>
+            <span class="bg-emerald-800 text-xs px-2 py-1 rounded-full font-mono">1.21.11対応 (v75)</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto max-w-5xl p-4 flex-1">
+        
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-300 mb-6">
+            <button id="tabCustom" class="py-3 px-6 font-bold text-sm md:text-base border-b-4 transition-colors tab-active flex items-center">
+                <i data-lucide="list-music" class="w-5 h-5 mr-2"></i> 個別設定モード
+            </button>
+            <button id="tabAllInOne" class="py-3 px-6 font-bold text-sm md:text-base border-b-4 transition-colors tab-inactive flex items-center">
+                <i data-lucide="bomb" class="w-5 h-5 mr-2"></i> 一括上書き（カオス）モード
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Left Column: Settings -->
+            <div class="space-y-6">
+                
+                <!-- Pack Settings -->
+                <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-bold mb-4 flex items-center text-emerald-700 border-b pb-2">
+                        <i data-lucide="settings" class="mr-2 w-5 h-5"></i> パックの基本設定
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">パックの説明 (Description)</label>
+                            <input type="text" id="packDesc" placeholder="例: 俺の考えた最強のオモシロ音声パック" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none" value="カスタム音声リソースパック">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">アイコン画像 (pack.png) - 任意</label>
+                            <div class="flex items-center space-x-4">
+                                <label class="cursor-pointer bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 py-2 px-4 rounded-lg flex items-center transition-colors">
+                                    <i data-lucide="image" class="w-4 h-4 mr-2"></i> 画像を選択
+                                    <input type="file" id="packIcon" accept="image/png, image/jpeg" class="hidden">
+                                </label>
+                                <span id="packIconName" class="text-sm text-gray-500 truncate max-w-[200px]">未選択 (128x128推奨)</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ================= CUSTOM MODE INPUTS ================= -->
+                <section id="customModeInputs" class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 relative">
+                    <h2 class="text-lg font-bold mb-4 flex items-center text-emerald-700 border-b pb-2">
+                        <i data-lucide="music" class="mr-2 w-5 h-5"></i> 音声の割り当て（個別）
+                    </h2>
+                    
+                    <div class="bg-blue-50 text-blue-700 text-xs p-3 rounded mb-4 flex items-start">
+                        <i data-lucide="info" class="w-4 h-4 mr-1 shrink-0 mt-0.5"></i>
+                        <span>イベントごとに好きな音声を割り当てて、こだわりのパックを作ります。</span>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">1. 置き換えるイベントを選択</label>
+                            <select id="eventSelect" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-gray-50">
+                                <optgroup label="プレイヤー・システム">
+                                    <option value="entity.player.hurt">プレイヤーのダメージ音</option>
+                                    <option value="entity.player.death">プレイヤーの死亡音</option>
+                                    <option value="entity.player.levelup">レベルアップ音</option>
+                                    <option value="entity.experience_orb.pickup">経験値オーブを拾う音</option>
+                                    <option value="ui.button.click">ボタンのクリック音</option>
+                                </optgroup>
+                                <optgroup label="友好的なモブ">
+                                    <option value="entity.chicken.ambient">ニワトリの鳴き声</option>
+                                    <option value="entity.villager.ambient">村人の声</option>
+                                    <option value="entity.villager.yes">村人の取引成立（はい）</option>
+                                    <option value="entity.villager.no">村人の取引拒否（いいえ）</option>
+                                    <option value="entity.cat.ambient">ネコの鳴き声</option>
+                                    <option value="entity.wolf.ambient">オオカミ（犬）の鳴き声</option>
+                                </optgroup>
+                                <optgroup label="敵対的なモブ・その他">
+                                    <option value="entity.generic.explode">爆発音全般</option>
+                                    <option value="entity.creeper.primed">クリーパーの起爆音（シューー）</option>
+                                    <option value="entity.zombie.ambient">ゾンビの声</option>
+                                    <option value="entity.skeleton.shoot">スケルトンの弓を撃つ音</option>
+                                    <option value="entity.ghast.scream">ガストの叫び声</option>
+                                    <option value="entity.enderman.stare">エンダーマンと目が合った音</option>
+                                    <option value="entity.warden.roar">ウォーデンの咆哮</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">2. 音声ファイル (.ogg) を選択</label>
+                            <input type="file" id="soundFile" accept=".ogg" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 border border-gray-300 rounded-lg bg-gray-50">
+                        </div>
+
+                        <button id="addSoundBtn" class="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold py-2 px-4 rounded-lg flex justify-center items-center transition-colors border border-emerald-300">
+                            <i data-lucide="plus" class="mr-2 w-5 h-5"></i> この音声をリストに追加
+                        </button>
+                    </div>
+                </section>
+
+                <!-- ================= ALL IN ONE MODE INPUTS ================= -->
+                <section id="allInOneModeInputs" class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 relative hidden">
+                    <h2 class="text-lg font-bold mb-4 flex items-center text-red-600 border-b border-red-200 pb-2">
+                        <i data-lucide="speaker" class="mr-2 w-5 h-5"></i> マイクラ全音声の一括上書き
+                    </h2>
+                    
+                    <div class="bg-red-50 text-red-700 text-sm p-4 rounded mb-6 border border-red-200">
+                        <p class="font-bold mb-1 flex items-center"><i data-lucide="alert-triangle" class="w-4 h-4 mr-1"></i> カオスモード作動</p>
+                        歩行音、ブロック破壊音、モブの鳴き声、ダメージ音など、<br>
+                        <b>約1,500種類以上の主要なサウンドイベント全て</b>を、下で選択した「1つの音声」で上書きします。
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">上書きに使う「最強の音声 (.ogg)」を1つ選んでください</label>
+                            <input type="file" id="allInOneSoundFile" accept=".ogg" class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-red-50 file:text-red-700 hover:file:bg-red-100 border border-gray-300 rounded-lg bg-gray-50">
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Lists & Actions -->
+            <div class="space-y-6 flex flex-col h-full">
+                
+                <!-- CUSTOM MODE LIST -->
+                <section id="customModeList" class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex-1 flex flex-col min-h-[400px]">
+                    <h2 class="text-lg font-bold mb-4 flex items-center text-emerald-700 border-b pb-2">
+                        <i data-lucide="list-checks" class="mr-2 w-5 h-5"></i> 個別割り当てリスト
+                    </h2>
+                    
+                    <div id="soundList" class="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
+                        <!-- JS generated list -->
+                    </div>
+                    
+                    <div class="pt-4 border-t mt-auto">
+                        <button id="generateBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl flex justify-center items-center transition-colors shadow-md transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i data-lucide="download" class="mr-2 w-6 h-6"></i> 個別パックを生成 (ZIP)
+                        </button>
+                    </div>
+                </section>
+
+                <!-- ALL IN ONE MODE LIST -->
+                <section id="allInOneModeList" class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex-1 flex flex-col min-h-[400px] hidden">
+                    <h2 class="text-lg font-bold mb-4 flex items-center text-red-600 border-b border-red-200 pb-2">
+                        <i data-lucide="zap" class="mr-2 w-5 h-5"></i> 準備完了ステータス
+                    </h2>
+                    
+                    <div class="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-4">
+                        <div class="bg-gray-100 p-6 rounded-full">
+                            <i data-lucide="bomb" class="w-16 h-16 text-red-500"></i>
+                        </div>
+                        <h3 class="font-bold text-xl text-gray-800">一括上書きの準備</h3>
+                        <p class="text-gray-600 text-sm">
+                            音声ファイルを選択したら、下のボタンを押してください。<br>
+                            歩くたび、壊すたびに同じ音が鳴るカオスなパックが生成されます。
+                        </p>
+                    </div>
+                    
+                    <div class="pt-4 border-t border-red-100 mt-auto">
+                        <button id="generateAllInOneBtn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-4 rounded-xl flex justify-center items-center transition-colors shadow-md transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i data-lucide="flame" class="mr-2 w-6 h-6"></i> カオスパックを一括生成 (ZIP)
+                        </button>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-400 text-center py-4 text-sm mt-8">
+        <p>※ 生成されるパックの pack_format は 75 (1.21.11対応) です。</p>
+        <p>※ ブラウザ上で処理が完結するため、アップロードした音声が外部に送信されることはありません。</p>
+    </footer>
+
+    <!-- Toast -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <script>
+        lucide.createIcons();
+
+        // 状態管理
+        const state = {
+            mode: 'custom', // 'custom' or 'all_in_one'
+            customSounds: [], 
+            packIconFile: null
+        };
+
+        // DOM取得
+        const tabCustom = document.getElementById('tabCustom');
+        const tabAllInOne = document.getElementById('tabAllInOne');
+        const customModeInputs = document.getElementById('customModeInputs');
+        const customModeList = document.getElementById('customModeList');
+        const allInOneModeInputs = document.getElementById('allInOneModeInputs');
+        const allInOneModeList = document.getElementById('allInOneModeList');
+
+        const eventSelect = document.getElementById('eventSelect');
+        const soundFile = document.getElementById('soundFile');
+        const addSoundBtn = document.getElementById('addSoundBtn');
+        const soundList = document.getElementById('soundList');
+        const generateBtn = document.getElementById('generateBtn');
+        const generateAllInOneBtn = document.getElementById('generateAllInOneBtn');
+        const allInOneSoundFile = document.getElementById('allInOneSoundFile');
+        const packIcon = document.getElementById('packIcon');
+        const packIconName = document.getElementById('packIconName');
+
+        let currentAudio = null;
+
+        // トースト通知
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-600' : 'bg-emerald-600';
+            const icon = type === 'error' ? 'alert-circle' : 'check-circle';
+            
+            toast.className = `${bgClass} text-white px-4 py-3 rounded-lg shadow-lg flex items-center transform transition-all duration-300 translate-y-10 opacity-0`;
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 mr-2"></i><span>${message}</span>`;
+            
+            container.appendChild(toast);
+            lucide.createIcons({ root: toast });
+
+            requestAnimationFrame(() => toast.classList.remove('translate-y-10', 'opacity-0'));
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // タブ切り替えロジック
+        function switchMode(mode) {
+            state.mode = mode;
+            if (mode === 'custom') {
+                tabCustom.className = 'py-3 px-6 font-bold text-sm md:text-base border-b-4 transition-colors tab-active flex items-center';
+                tabAllInOne.className = 'py-3 px-6 font-bold text-sm md:text-base border-b-4 transition-colors tab-inactive flex items-center';
+                customModeInputs.classList.remove('hidden');
+                customModeList.classList.remove('hidden');
+                allInOneModeInputs.classList.add('hidden');
+                allInOneModeList.classList.add('hidden');
+            } else {
+                tabAllInOne.className = 'py-3 px-6 font-bold text-sm md:text-base border-b-4 transition-colors tab-active !text-red-600 !border-red-600 flex items-center';
+                tabCustom.className = 'py-3 px-6 font-bold text-sm md:text-base border-b-4 transition-colors tab-inactive flex items-center';
+                allInOneModeInputs.classList.remove('hidden');
+                allInOneModeList.classList.remove('hidden');
+                customModeInputs.classList.add('hidden');
+                customModeList.classList.add('hidden');
+            }
+        }
+
+        tabCustom.addEventListener('click', () => switchMode('custom'));
+        tabAllInOne.addEventListener('click', () => switchMode('all_in_one'));
+
+        // アイコン設定
+        packIcon.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                state.packIconFile = e.target.files[0];
+                packIconName.textContent = state.packIconFile.name;
+            } else {
+                state.packIconFile = null;
+                packIconName.textContent = "未選択 (128x128推奨)";
+            }
+        });
+
+        // ================= カスタムモード処理 =================
+        addSoundBtn.addEventListener('click', () => {
+            const file = soundFile.files[0];
+            if (!file || !file.name.toLowerCase().endsWith('.ogg')) {
+                showToast("有効な .ogg ファイルを選択してください。", "error");
+                return;
+            }
+
+            const eventId = eventSelect.value;
+            const eventName = eventSelect.options[eventSelect.selectedIndex].text;
+            const existingIndex = state.customSounds.findIndex(s => s.eventId === eventId);
+            
+            if (existingIndex !== -1) {
+                state.customSounds[existingIndex].file = file;
+                showToast(`${eventName} を上書きしました。`);
+            } else {
+                state.customSounds.push({ eventId, eventName, file });
+                showToast(`${eventName} を追加しました。`);
+            }
+            soundFile.value = '';
+            renderList();
+        });
+
+        window.removeSound = function(index) {
+            state.customSounds.splice(index, 1);
+            renderList();
+        };
+
+        window.playSound = function(index) {
+            if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; }
+            const url = URL.createObjectURL(state.customSounds[index].file);
+            currentAudio = new Audio(url);
+            currentAudio.play().catch(e => showToast("再生に失敗しました。", "error"));
+            currentAudio.onended = () => URL.revokeObjectURL(url);
+        };
+
+        function renderList() {
+            soundList.innerHTML = '';
+            if (state.customSounds.length === 0) {
+                soundList.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-gray-400 space-y-2 mt-10">
+                        <i data-lucide="inbox" class="w-12 h-12 opacity-50"></i>
+                        <p>まだ音声が追加されていません。</p>
+                    </div>`;
+                lucide.createIcons({ root: soundList });
+                generateBtn.disabled = true;
+                return;
+            }
+
+            generateBtn.disabled = false;
+            state.customSounds.forEach((sound, index) => {
+                const el = document.createElement('div');
+                el.className = 'flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm hover:border-emerald-300 transition-colors';
+                el.innerHTML = `
+                    <div class="flex-1 min-w-0 pr-3">
+                        <p class="font-bold text-sm text-gray-800 truncate">${sound.eventName}</p>
+                        <p class="text-xs text-gray-500 font-mono truncate mt-0.5">ID: ${sound.eventId}</p>
+                        <p class="text-xs text-emerald-600 truncate mt-1 flex items-center"><i data-lucide="file-audio" class="w-3 h-3 mr-1"></i> ${sound.file.name}</p>
+                    </div>
+                    <div class="flex items-center space-x-2 shrink-0">
+                        <button onclick="playSound(${index})" class="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><i data-lucide="play" class="w-4 h-4"></i></button>
+                        <button onclick="removeSound(${index})" class="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>`;
+                soundList.appendChild(el);
+            });
+            lucide.createIcons({ root: soundList });
+        }
+        renderList();
+
+        // ZIP生成共通処理
+        async function buildAndDownloadZip(soundsJsonData, filesToAdd, buttonEl, originalHtml) {
+            buttonEl.disabled = true;
+            buttonEl.innerHTML = `<i data-lucide="loader-2" class="mr-2 w-6 h-6 animate-spin"></i> 生成中...`;
+            lucide.createIcons({ root: buttonEl });
+
+            try {
+                const zip = new JSZip();
+                const desc = document.getElementById('packDesc').value || "カスタム音声リソースパック";
+                zip.file("pack.mcmeta", JSON.stringify({ pack: { pack_format: 75, description: desc } }, null, 2));
+
+                if (state.packIconFile) zip.file("pack.png", state.packIconFile);
+
+                const soundsJson = {};
+                filesToAdd.forEach(item => {
+                    zip.file(`assets/minecraft/sounds/${item.path}.ogg`, item.file);
+                });
+
+                // soundsJsonDataは { "entity.player.hurt": { replace: true, sounds: ["custom/file"] } } の形式
+                zip.file("assets/minecraft/sounds.json", JSON.stringify(soundsJsonData, null, 2));
+
+                const content = await zip.generateAsync({ type: "blob" });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = state.mode === 'all_in_one' ? "chaos_all_in_one_pack.zip" : "custom_sounds_pack.zip";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast("リソースパックの生成が完了しました！", "success");
+            } catch (error) {
+                console.error(error);
+                showToast("エラーが発生しました。", "error");
+            } finally {
+                buttonEl.disabled = false;
+                buttonEl.innerHTML = originalHtml;
+                lucide.createIcons({ root: buttonEl });
+            }
+        }
+
+        // 個別モード生成ボタン
+        generateBtn.addEventListener('click', () => {
+            if (state.customSounds.length === 0) return;
+            const soundsJsonData = {};
+            const filesToAdd = [];
+            
+            state.customSounds.forEach(sound => {
+                const safeFileName = sound.eventId.replace(/\./g, "_");
+                const customPath = `custom/${safeFileName}`;
+                soundsJsonData[sound.eventId] = { replace: true, sounds: [ customPath ] };
+                filesToAdd.push({ path: customPath, file: sound.file });
+            });
+            
+            buildAndDownloadZip(soundsJsonData, filesToAdd, generateBtn, generateBtn.innerHTML);
+        });
+
+        // ================= カオス（一括）モード処理 =================
+        
+        // マイクラの主要な全イベントリストを生成する関数（約1500種類以上）
+        function generateMassiveEventList() {
+            const list = [];
+            
+            // ブロック関連
+            const blocks = ['stone', 'wood', 'gravel', 'grass', 'dirt', 'sand', 'snow', 'glass', 'metal', 'deepslate', 'tuff', 'copper', 'netherrack', 'soul_sand', 'sculk', 'amethyst_block', 'bamboo', 'basalt', 'bone_block', 'calcite', 'chain', 'cherry_wood', 'coral_block', 'dripstone_block', 'froglight', 'honey_block', 'ladder', 'lantern', 'mud', 'nether_bricks', 'nether_wart', 'obsidian', 'powder_snow', 'root', 'shroomlight', 'slime_block', 'sponge', 'suspicious_sand', 'suspicious_gravel', 'vine', 'water', 'lava'];
+            const blockActions = ['break', 'step', 'place', 'hit', 'fall'];
+            blocks.forEach(b => blockActions.forEach(a => list.push(`block.${b}.${a}`)));
+
+            // モブ関連
+            const mobs = ['player', 'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'cow', 'pig', 'sheep', 'chicken', 'villager', 'iron_golem', 'snow_golem', 'horse', 'donkey', 'mule', 'bat', 'blaze', 'cave_spider', 'ghast', 'magma_cube', 'silverfish', 'slime', 'witch', 'wither', 'wither_skeleton', 'ender_dragon', 'cat', 'dog', 'wolf', 'ocelot', 'fox', 'panda', 'parrot', 'polar_bear', 'rabbit', 'squid', 'glow_squid', 'turtle', 'dolphin', 'axolotl', 'goat', 'frog', 'tadpole', 'warden', 'camel', 'sniffer', 'breeze', 'bogged', 'armadillo'];
+            const mobActions = ['ambient', 'hurt', 'death', 'step', 'attack'];
+            mobs.forEach(m => mobActions.forEach(a => list.push(`entity.${m}.${a}`)));
+
+            // アイテム・UI・その他
+            const itemsAndOthers = [
+                'ui.button.click', 'entity.experience_orb.pickup', 'entity.player.levelup', 'entity.player.burp',
+                'entity.generic.burn', 'entity.generic.death', 'entity.generic.drink', 'entity.generic.eat', 'entity.generic.explode', 'entity.generic.extinguish_fire', 'entity.generic.hurt', 'entity.generic.small_fall', 'entity.generic.splash', 'entity.generic.swim',
+                'item.break', 'item.pickup', 'item.totem.use', 'item.shield.block', 'item.shield.break', 'item.crossbow.shoot', 'item.trident.throw',
+                'ambient.cave', 'weather.rain', 'weather.rain.above'
+            ];
+            itemsAndOthers.forEach(i => list.push(i));
+
+            return list;
+        }
+
+        generateAllInOneBtn.addEventListener('click', () => {
+            const file = allInOneSoundFile.files[0];
+            if (!file || !file.name.toLowerCase().endsWith('.ogg')) {
+                showToast("上書き用の .ogg ファイルを選択してください。", "error");
+                return;
+            }
+
+            const allEvents = generateMassiveEventList();
+            const soundsJsonData = {};
+            const filesToAdd = [{ path: 'custom/all_in_one', file: file }];
+
+            // 全てのイベントIDに対して、全く同じ custom/all_in_one を割り当てる
+            allEvents.forEach(eventId => {
+                soundsJsonData[eventId] = {
+                    replace: true,
+                    sounds: [ "custom/all_in_one" ]
+                };
+            });
+
+            buildAndDownloadZip(soundsJsonData, filesToAdd, generateAllInOneBtn, generateAllInOneBtn.innerHTML);
+        });
+
+    </script>
+</body>
+</html>
